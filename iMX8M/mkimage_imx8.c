@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
+ * Copyright 2017-2018 NXP
  *
  * SPDX-License-Identifier:	GPL-2.0+
  * derived from u-boot's mkimage utility
@@ -82,6 +83,7 @@ typedef struct {
 typedef struct {
 	flash_header_v2_t fhdr;
 	boot_data_t boot_data;
+	uint32_t alignment[4];
 } imx_header_v2_t;
 
 
@@ -181,6 +183,9 @@ struct fdt_header {
 #define FDT_MAGIC	0xd00dfeed
 #define CSF_SIZE 0x2000
 
+#define ROM_V1 1
+#define ROM_V2 2 /* V2 ROM for iMX8MN */
+
 #define ALIGN(x,a)		__ALIGN_MASK((x),(__typeof__(x))(a)-1, a)
 #define __ALIGN_MASK(x,mask,mask2)	(((x)+(mask))/(mask2)*(mask2))
 
@@ -258,10 +263,16 @@ struct fdt_header {
 static void fill_zero(int ifd, int size, int offset)
 {
 	int fill_size;
+	int ret;
 	uint8_t zeros[4096];
 	memset(zeros, 0, sizeof(zeros));
 
-	lseek(ifd, offset, SEEK_SET);
+	ret = lseek(ifd, offset, SEEK_SET);
+	if (ret < 0) {
+		fprintf(stderr, "%s: lseek error %s\n",
+				__func__, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 
 	while (size) {
 
@@ -290,7 +301,7 @@ copy_file (int ifd, const char *datafile, int pad, int offset, int datafile_offs
 	int tail;
 	int zero = 0;
 	uint8_t zeros[4096];
-	int size;
+	int size, ret;
 
 	memset(zeros, 0, sizeof(zeros));
 
@@ -314,7 +325,12 @@ copy_file (int ifd, const char *datafile, int pad, int offset, int datafile_offs
 	}
 
 	size = sbuf.st_size - datafile_offset;
-	lseek(ifd, offset, SEEK_SET);
+	ret = lseek(ifd, offset, SEEK_SET);
+	if (ret < 0) {
+		fprintf(stderr, "%s: lseek error %s\n",
+				__func__, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 	if (write(ifd, ptr + datafile_offset, size) != size) {
 		fprintf (stderr, "Write error %s\n",
 			strerror(errno));
@@ -839,6 +855,7 @@ void generate_sld_with_ivt(char * input_file, uint32_t ep, char *out_file)
 		exit(EXIT_FAILURE);
 	}
 
+	munmap((void *)file_ptr, sbuf.st_size);
 	close(ivt_fd);
 	close(input_fd);
 }
@@ -850,8 +867,14 @@ int generate_ivt_for_fit(int fd, int fit_offset, uint32_t ep, uint32_t *fit_load
 
 	uint32_t fit_size, load_addr;
 	int align_len = 64 - 1; /* 64 is cacheline size */
+	int ret;
 
-	lseek(fd, fit_offset, SEEK_SET);
+	ret = lseek(fd, fit_offset, SEEK_SET);
+	if (ret < 0) {
+		fprintf(stderr, "%s: lseek error %s\n",
+				__func__, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 
 	if (read(fd, (char *)&image_header, sizeof(uimage_header_t)) != sizeof(uimage_header_t)) {
 		fprintf (stderr, "generate_ivt_for_fit read failed: %s\n",
@@ -871,7 +894,12 @@ int generate_ivt_for_fit(int fd, int fit_offset, uint32_t ep, uint32_t *fit_load
 
 	fit_size = ALIGN(fit_size, ALIGN_SIZE);
 
-	lseek(fd, fit_offset + fit_size, SEEK_SET);
+	ret = lseek(fd, fit_offset + fit_size, SEEK_SET);
+	if (ret < 0) {
+		fprintf(stderr, "%s: lseek error %s\n",
+				__func__, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 
 	/* ep is the u-boot entry. SPL loads the FIT before the u-boot address. 0x2000 is for CSF_SIZE */
 	load_addr = (ep - (fit_size + CSF_SIZE) - 512 -
@@ -911,6 +939,7 @@ int main(int argc, char **argv)
 	int using_fit = 0;
 	dcd_v2_t dcd_table;
 	uimage_header_t uimage_hdr;
+	uint32_t version = ROM_V1;
 
 	static struct option long_options[] =
 	{
@@ -926,6 +955,7 @@ int main(int argc, char **argv)
 		{"dev", required_argument, NULL, 'e'},
 		{"csf", required_argument, NULL, 'c'},
 		{"second_loader", required_argument, NULL, 'u'},
+		{"version", required_argument, NULL, 'v'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -1010,8 +1040,8 @@ int main(int argc, char **argv)
 				break;
 			case 'e':
 				fprintf(stderr, "BOOT DEVICE:\t%s\n", optarg);
-				if (!strcmp(optarg, "nand")) {
-					ivt_offset = IVT_OFFSET_NAND;
+				if (!strcmp(optarg, "flexspi")) {
+					ivt_offset = IVT_OFFSET_FLEXSPI;
 					rom_image_offset = 0;
 				} else if (!strcmp(optarg, "sd")) {
 					ivt_offset = IVT_OFFSET_SD;
@@ -1021,6 +1051,17 @@ int main(int argc, char **argv)
 					rom_image_offset = 0;
 				} else {
 					fprintf(stderr, "\n-dev option, Valid boot devices are sd, emmc_fastboot or nand\n\n");
+					exit(1);
+				}
+				break;
+			case 'v':
+				fprintf(stderr, "ROM VERSION:\t%s\n", optarg);
+				if (!strcmp(optarg, "v2")) {
+					version = ROM_V2; /* iMX8MN should use ROM V2 */
+				} else if (!strcmp(optarg, "v1")) {
+					version = ROM_V1;
+				} else {
+					fprintf(stderr, "\n-version option, valid versions are v1 (for iMX8MQ/8MM), v2 (for iMX8MN)\n\n");
 					exit(1);
 				}
 				break;
@@ -1060,6 +1101,16 @@ int main(int argc, char **argv)
 	{
 		fprintf(stderr, "Can't enable DCD and PLUGIN at same time! abort\n");
 		exit(1);
+	}
+
+	if (version == ROM_V2) {
+		/* V2 ROM set IVT offset to 0 for all boot devices */
+		ivt_offset = 0;
+
+		if (dcd_img || plugin_img) {
+			fprintf(stderr, "V2 ROM don't support DCD nor PLUGIN, abort\n");
+			exit(1);
+		}
 	}
 
 	file_off = 0;
@@ -1215,10 +1266,10 @@ int main(int argc, char **argv)
 			close(csf_plugin_fd);
 
 			imx_header[PLUGIN_IVT_ID].fhdr.csf = imx_header[PLUGIN_IVT_ID].boot_data.start + imx_header[PLUGIN_IVT_ID].boot_data.size;
-			imx_header[PLUGIN_IVT_ID].boot_data.size += ALIGN(sbuf.st_size, 8);
+			imx_header[PLUGIN_IVT_ID].boot_data.size += ALIGN(sbuf.st_size, 64);
 
 			csf_plugin_off = file_off;
-			file_off += ALIGN(sbuf.st_size, 8); /* Align for the next IVT */
+			file_off += ALIGN(sbuf.st_size, 64); /* Align for the next IVT */
 		}
 
 		/* We attach the secondary IVT to the plugin image (CSF contained),  and set it to load with plugin image.
@@ -1236,8 +1287,8 @@ int main(int argc, char **argv)
 		dcd_size = parse_cfg_file(&dcd_table, dcd_img);
 		fprintf(stderr, "dcd size = %d\n", dcd_size);
 
-		if (dcd_size > (ROM_INITIAL_LOAD_SIZE - ivt_offset - sizeof(imx_header_v2_t))) {
-			fprintf(stderr, "DCD table with size %u exceeds maximum size %lu\n", dcd_size, (ROM_INITIAL_LOAD_SIZE - ivt_offset - sizeof(imx_header_v2_t)));
+		if (ALIGN(dcd_size, 64) > (ROM_INITIAL_LOAD_SIZE - ivt_offset - sizeof(imx_header_v2_t))) {
+			fprintf(stderr, "DCD table with size %u exceeds maximum size %lu\n", ALIGN(dcd_size, 64), (ROM_INITIAL_LOAD_SIZE - ivt_offset - sizeof(imx_header_v2_t)));
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1260,7 +1311,7 @@ int main(int argc, char **argv)
 	imx_header[IMAGE_IVT_ID].fhdr.header.version = IVT_VERSION; /* 0x41 */
 	imx_header[IMAGE_IVT_ID].fhdr.entry = ap_start_addr;
 
-	imx_header[IMAGE_IVT_ID].fhdr.self = ap_start_addr - sizeof(imx_header_v2_t) - ALIGN(dcd_size, 8);
+	imx_header[IMAGE_IVT_ID].fhdr.self = ap_start_addr - sizeof(imx_header_v2_t) - ALIGN(dcd_size, 64);
 	if (dcd_size) {
 		imx_header[IMAGE_IVT_ID].fhdr.dcd_ptr = imx_header[IMAGE_IVT_ID].fhdr.self + sizeof(imx_header_v2_t);
 		dcd_off = header_image_off + sizeof(imx_header_v2_t);
@@ -1282,9 +1333,9 @@ int main(int argc, char **argv)
 		file_off +=  ALIGN(sbuf.st_size + sizeof(imx_header_v2_t), sector_size);
 	} else {
 		imx_header[IMAGE_IVT_ID].boot_data.start = imx_header[IMAGE_IVT_ID].fhdr.self - ivt_offset;
-		imx_header[IMAGE_IVT_ID].boot_data.size = ALIGN(sbuf.st_size + sizeof(imx_header_v2_t) + ivt_offset + ALIGN(dcd_size, 8), sector_size);
+		imx_header[IMAGE_IVT_ID].boot_data.size = ALIGN(sbuf.st_size + sizeof(imx_header_v2_t) + ivt_offset + ALIGN(dcd_size, 64), sector_size);
 
-		image_off = header_image_off + sizeof(imx_header_v2_t) + ALIGN(dcd_size, 8);
+		image_off = header_image_off + sizeof(imx_header_v2_t) + ALIGN(dcd_size, 64);
 		file_off +=  imx_header[IMAGE_IVT_ID].boot_data.size;
 	}
 
@@ -1373,7 +1424,8 @@ int main(int argc, char **argv)
 			file_off += CSF_SIZE - sizeof(flash_header_v2_t);
 		}else {
 			sld_header_off = sld_src_off - rom_image_offset;
-			imx_header[IMAGE_IVT_ID].fhdr.reserved1 = sld_header_off - header_image_off; /* Record the second bootloader relative offset in image's IVT reserved1*/
+			if (version == ROM_V1)
+				imx_header[IMAGE_IVT_ID].fhdr.reserved1 = sld_header_off - header_image_off; /* Record the second bootloader relative offset in image's IVT reserved1*/
 			sld_fd = open(sld_img, O_RDONLY | O_BINARY);
 			if (sld_fd < 0) {
 				fprintf(stderr, "%s: Can't open: %s\n",
@@ -1528,15 +1580,27 @@ int main(int argc, char **argv)
 		fprintf(stderr, "\nSIGNED HDMI FW:\n");
 		fprintf(stderr, " header_hdmi_off \t0x%x\n",
 			header_hdmi_off);
-	} else {
+	} else if (hdmi_img) {
 		fprintf(stderr, "\nHDMI FW:\n");
 		fprintf(stderr, " header_hdmi_off \t0x%x\n hdmi_off \t\t0x%x\n header_hdmi_2_off \t0x%x\n csf_hdmi_off \t\t0x%x\n",
 			header_hdmi_off, hdmi_off, header_hdmi_2_off, csf_hdmi_off);
 	}
 
-	fprintf(stderr, "\nPLUGIN:\n");
-	fprintf(stderr, " header_plugin_off \t0x%x\n plugin_off \t\t0x%x\n csf_plugin_off \t0x%x\n",
-		header_plugin_off, plugin_off, csf_plugin_off);
+	if (plugin_img) {
+		fprintf(stderr, "\nPLUGIN:\n");
+		fprintf(stderr, " header_plugin_off \t0x%x\n plugin_off \t\t0x%x\n csf_plugin_off \t0x%x\n",
+			header_plugin_off, plugin_off, csf_plugin_off);
+	}
+
+	/* The FLEXSPI configuration parameters will add to flash.bin by script, so need add 0x1000 offset to every offset prints */
+	if (ivt_offset == IVT_OFFSET_FLEXSPI) {
+		header_image_off += ivt_offset;
+		dcd_off += ivt_offset;
+		image_off += ivt_offset;
+		csf_off += ivt_offset;
+		sld_header_off += ivt_offset;
+		sld_csf_off += ivt_offset;
+	}
 
 	fprintf(stderr, "\nLoader IMAGE:\n");
 	fprintf(stderr, " header_image_off \t0x%x\n dcd_off \t\t0x%x\n image_off \t\t0x%x\n csf_off \t\t0x%x\n",

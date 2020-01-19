@@ -3,16 +3,10 @@
 # script to generate FIT image source for i.MX8MQ boards with
 # ARM Trusted Firmware and multiple device trees (given on the command line)
 #
-# usage: $0 <dt_name> [<dt_name> [<dt_name] ...]
 
 [ -z "$BL31" ] && BL31="bl31.bin"
 # keep backward compatibility
 [ -z "$TEE_LOAD_ADDR" ] && TEE_LOAD_ADDR="0xfe000000"
-
-if [ -z "$ATF_LOAD_ADDR" ]; then
-	echo "ERROR: BL31 load address is not set" >&2
-	exit 0
-fi
 
 if [ ! -f $BL31 ]; then
 	echo "ERROR: BL31 file $BL31 NOT found" >&2
@@ -32,23 +26,15 @@ else
 	ls -lct tee.bin | awk '{print $5}' >&2
 fi
 
-BL33="u-boot-nodtb.bin"
+BL33="u-boot-hash.bin"
 
 if [ ! -f $BL33 ]; then
 	echo "ERROR: $BL33 file NOT found" >&2
 	exit 0
 else
-	
-	echo "u-boot-nodtb.bin size: " >&2
-	ls -lct u-boot-nodtb.bin | awk '{print $5}' >&2
+	echo "$BL33 size: " >&2
+	ls -lct u-boot-hash.bin | awk '{print $5}' >&2
 fi
-
-for dtname in $*
-do
-	echo "$dtname size: " >&2
-	ls -lct $dtname | awk '{print $5}' >&2
-done
-
 
 cat << __HEADER_EOF
 /dts-v1/;
@@ -63,7 +49,7 @@ cat << __HEADER_EOF
 			type = "standalone";
 			arch = "arm64";
 			compression = "none";
-			load = <0x40200000>;
+			load = <0x80020000>;
 		};
 		atf@1 {
 			description = "ARM Trusted Firmware";
@@ -71,8 +57,8 @@ cat << __HEADER_EOF
 			type = "firmware";
 			arch = "arm64";
 			compression = "none";
-			load = <$ATF_LOAD_ADDR>;
-			entry = <$ATF_LOAD_ADDR>;
+			load = <0x80000000>;
+			entry = <0x80000000>;
 		};
 __HEADER_EOF
 
@@ -90,20 +76,6 @@ cat << __HEADER_EOF
 __HEADER_EOF
 fi
 
-cnt=1
-for dtname in $*
-do
-	cat << __FDT_IMAGE_EOF
-		fdt@$cnt {
-			description = "$(basename $dtname .dtb)";
-			data = /incbin/("$dtname");
-			type = "flat_dt";
-			compression = "none";
-		};
-__FDT_IMAGE_EOF
-cnt=$((cnt+1))
-done
-
 cat << __CONF_HEADER_EOF
 	};
 	configurations {
@@ -111,31 +83,23 @@ cat << __CONF_HEADER_EOF
 
 __CONF_HEADER_EOF
 
-cnt=1
-for dtname in $*
-do
 if [ -f $BL32 ]; then
-cat << __CONF_SECTION_EOF
-		config@$cnt {
-			description = "$(basename $dtname .dtb)";
+cat << __CONF_SECTION1_EOF
+		config@1 {
+			description = "fsl-imx8qm-mek";
 			firmware = "uboot@1";
 			loadables = "atf@1", "tee@1";
-			fdt = "fdt@$cnt";
 		};
-__CONF_SECTION_EOF
+__CONF_SECTION1_EOF
 else
 cat << __CONF_SECTION1_EOF
-		config@$cnt {
-			description = "$(basename $dtname .dtb)";
+		config@1 {
+			description = "fsl-imx8qm-mek";
 			firmware = "uboot@1";
 			loadables = "atf@1";
-			fdt = "fdt@$cnt";
 		};
 __CONF_SECTION1_EOF
 fi
-cnt=$((cnt+1))
-done
-
 cat << __ITS_EOF
 	};
 };

@@ -1,2 +1,2 @@
-#define MKIMAGE_COMMIT 0x597e03f0
+#define MKIMAGE_COMMIT 0xdd023400
 

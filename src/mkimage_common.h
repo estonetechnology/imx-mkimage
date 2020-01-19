@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 NXP
+ * Copyright 2017 NXP
  *
  * SPDX-License-Identifier:     GPL-2.0+
  * derived from u-boot's mkimage utility
@@ -34,6 +34,7 @@ typedef enum option_type {
     NO_IMG = 0,
     DCD,
     SCFW,
+    SECO,
     M4,
     AP,
     OUTPUT,
@@ -42,7 +43,11 @@ typedef enum option_type {
     FLAG,
     DEVICE,
     NEW_CONTAINER,
-    PARTITION
+    APPEND,
+    DATA,
+    PARTITION,
+    FILEOFF,
+    MSG_BLOCK
 } option_type_t;
 
 
@@ -54,6 +59,12 @@ typedef struct {
       uint64_t entry;/* image entry address or general purpose num */
       uint64_t ext;
 } image_t;
+
+typedef enum REVISION_TYPE {
+    NO_REV = 0,
+    A0,
+    B0
+} rev_type_t;
 
 typedef enum SOC_TYPE {
     NONE = 0,
@@ -98,16 +109,31 @@ typedef struct {
 #define CORE_CA72       5
 #define CORE_SECO       6
 
+#define SC_R_OTP                  357U
+#define SC_R_DEBUG                354U
+#define SC_R_ROM_0                236U
+#define SC_R_SNVS                 356U
+
+#define MSG_DEBUG_EN    SC_R_DEBUG
+#define MSG_FUSE        SC_R_OTP
+#define MSG_FIELD       SC_R_ROM_0
+#define MSG_PATCH       SC_R_SNVS
+
 #define IMG_TYPE_CSF     0x01   /* CSF image type */
 #define IMG_TYPE_SCD     0x02   /* SCD image type */
 #define IMG_TYPE_EXEC    0x03   /* Executable image type */
 #define IMG_TYPE_DATA    0x04   /* Data image type */
+#define IMG_TYPE_DCD_DDR 0x05   /* DCD/DDR image type */
+#define IMG_TYPE_SECO    0x06   /* SECO image type */
+#define IMG_TYPE_PROV    0x07   /* Provisioning image type */
+#define IMG_TYPE_DEK     0x08   /* DEK validation type */
 
 #define IMG_TYPE_SHIFT   0
 #define IMG_TYPE_MASK    0x1f
 #define IMG_TYPE(x)      (((x) & IMG_TYPE_MASK) >> IMG_TYPE_SHIFT)
 
 #define BOOT_IMG_FLAGS_CORE_MASK        0xF
+#define BOOT_IMG_FLAGS_CORE_SHIFT       0x04
 #define BOOT_IMG_FLAGS_CPU_RID_MASK     0x3FF0
 #define BOOT_IMG_FLAGS_CPU_RID_SHIFT    4
 #define BOOT_IMG_FLAGS_MU_RID_MASK      0xFFC000
@@ -296,5 +322,8 @@ int build_container_qm(uint32_t sector_size, uint32_t ivt_offset, char * out_fil
 int build_container_qx(uint32_t sector_size, uint32_t ivt_offset, char * out_file,
                 bool emmc_fastboot, image_t* image_stack);
 
+int build_container_qx_qm_b0(soc_type_t soc, uint32_t sector_size, uint32_t ivt_offset, char * out_file,
+                bool emmc_fastboot, image_t* image_stack, bool dcd_skip, uint8_t fuse_version,
+                uint16_t sw_version, char *images_hash);
 
 

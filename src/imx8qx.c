@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 NXP
+ * Copyright 2017 NXP
  *
  * SPDX-License-Identifier:     GPL-2.0+
  * derived from u-boot's mkimage utility
@@ -266,6 +266,9 @@ int build_container_qx(uint32_t sector_size, uint32_t ivt_offset, char* out_file
                 case NEW_CONTAINER: /* move the counters forward to start on a new container */
                         container++;
                         cont_img_count=0; /* reset img count when moving to new container */
+                        break;
+                case PARTITION: /* keep custom partition until next executable image */
+                        custom_partition = img_sp->entry;
                         break;
                 case DCD:
                         break; /* skip DCD here because we already processed it */

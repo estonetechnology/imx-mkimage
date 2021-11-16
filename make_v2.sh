@@ -29,6 +29,7 @@ cd -
 cp iMX8M/flash.bin ./uuu/
 cp ../linux-imx/arch/arm64/boot/Image ./uuu/
 cp ../linux-imx/arch/arm64/boot/dts/freescale/est-imx8mm-poe2237-tas-v2-m4.dtb ./uuu/est-imx8mm-poe2237-tas.dtb
+cp ./uuu/est-imx8mm-poe2237-v2.dtb ./uuu/est-imx8mm-poe2237.dtb
 cd uuu
 zip -r ../iob-2237-tas-v2-uuu.zip ./*
 cd -

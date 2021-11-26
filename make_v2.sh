@@ -24,8 +24,13 @@ cd ../linux-imx
 make distclean
 make poe2237_defconfig
 make -j8
+rm ./install -rf
+make modules_install INSTALL_MOD_PATH=./install
+cd ./install
+tar cjvf lib.tar.bz2 lib
+cp lib.tar.bz2 ../../imx-mkimage/uuu
 ############build uuu dir#####################
-cd -
+cd ../../imx-mkimage
 cp iMX8M/flash.bin ./uuu/
 cp ../linux-imx/arch/arm64/boot/Image ./uuu/
 cp ../linux-imx/arch/arm64/boot/dts/freescale/est-imx8mm-poe2237-tas-v2-m4.dtb ./uuu/est-imx8mm-poe2237-tas.dtb

@@ -26,7 +26,7 @@ SDPV: jump
 FB: ucmd setenv fastboot_buffer ${loadaddr}
 FB: download -f Image
 FB: ucmd setenv fastboot_buffer ${fdt_addr}
-FB: download -f est-imx8mm-bis2237.dtb
+FB: download -f est-imx8mm-ppc4210.dtb
 FB: ucmd setenv fastboot_buffer ${initrd_addr}
 FB: download -f initramfs.cpio.gz.uboot
 FB: ucmd setenv mfgtool_args ${mfgtool_args} mfg_mmcdev=${emmc_dev}
@@ -57,7 +57,7 @@ FBK: ucmd mmc=`cat /tmp/mmcdev`; mkfs.vfat /dev/mmcblk${mmc}p1
 FBK: ucmd mmc=`cat /tmp/mmcdev`; mkdir -p /mnt/fat
 FBK: ucmd mmc=`cat /tmp/mmcdev`; mount -t vfat /dev/mmcblk${mmc}p1 /mnt/fat
 FBK: ucp  Image t:/mnt/fat
-FBK: ucp  est-imx8mm-bis2237.dtb t:/mnt/fat
+FBK: ucp  est-imx8mm-ppc4210.dtb t:/mnt/fat
 FBK: Sync
 FBK: ucmd umount /mnt/fat
 FBK: ucmd mmc=`cat /tmp/mmcdev`; mkfs.ext3 -F -E nodiscard /dev/mmcblk${mmc}p2
